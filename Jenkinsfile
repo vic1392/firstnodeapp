@@ -15,16 +15,16 @@ pipeline {
                 
                 // Grab the short Git commit SHA for this build
                 script {
-                    IMAGE_TAG = sh(
+                    env.IMAGE_TAG = sh(
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
                     
-                    if (!IMAGE_TAG) {
-                        IMAGE_TAG = 'unknown'
+                    if (!env.IMAGE_TAG) {
+                        env.IMAGE_TAG = 'unknown'
                     }
                     
-                    echo "✅ Code checked out — commit SHA: ${IMAGE_TAG}"
+                    echo "✅ Code checked out — commit SHA: ${env.IMAGE_TAG}"
                 }
             }
         }
