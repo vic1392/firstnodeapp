@@ -1,11 +1,31 @@
 pipeline {
     agent any
     
+    environment {
+        AWS_ACCOUNT_ID = '312695118327'          // REPLACE with YOUR account ID
+        AWS_REGION     = 'eu-central-1'          // REPLACE with your region
+        ECR_REPO       = 'task-manager-api'
+        IMAGE_TAG      = ''                      // Set dynamically from Git SHA
+    }
+    
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo '✅ Code checked out successfully'
+                
+                // Grab the short Git commit SHA for this build
+                script {
+                    IMAGE_TAG = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!IMAGE_TAG) {
+                        IMAGE_TAG = 'unknown'
+                    }
+                    
+                    echo "✅ Code checked out — commit SHA: ${IMAGE_TAG}"
+                }
             }
         }
         
@@ -16,42 +36,65 @@ pipeline {
             }
         }
         
-        stage('Test') {
+        stage('Unit Tests') {
             steps {
-                // This multi-line script starts the app, tests it, and cleans up
                 sh '''
-                    echo "🚀 Starting server in the background for testing..."
                     node server.js &
-                    SERVER_PID=$!
-                    echo "Server started with Process ID: $SERVER_PID"
-                    
-                    echo "⏳ Waiting 3 seconds for server to boot..."
+                    APP_PID=$!
                     sleep 3
-                    
-                    echo "🧪 Running tests..."
                     npm test
-                    TEST_EXIT_CODE=$?
-                    
-                    echo "🛑 Stopping the server..."
-                    kill $SERVER_PID
-                    
-                    # Exit with the test result (0 = success, 1 = failure)
-                    exit $TEST_EXIT_CODE
+                    TEST_EXIT=$?
+                    kill $APP_PID
+                    exit $TEST_EXIT
                 '''
-                echo '✅ All tests passed'
+                echo '✅ Tests passed'
+            }
+        }
+        
+        stage('Code Quality') {
+            steps {
+                sh '''
+                    echo "📊 Code Quality Report:"
+                    echo "Total JS files: $(find . -name '*.js' | wc -l)"
+                    echo "Total lines of code: $(find . -name '*.js' -not -path './node_modules/*' | xargs wc -l | tail -1)"
+                    echo "TODOs found: $(grep -r 'TODO' . --exclude-dir=node_modules | wc -l)"
+                '''
+                echo '✅ Code quality check done'
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
+                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest"
+                echo "✅ Docker image built with tag ${IMAGE_TAG}"
+            }
+        }
+        
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                '''
+                echo "✅ Image pushed to ECR with tag ${IMAGE_TAG}"
             }
         }
     }
     
     post {
-        always {
-            echo '🏁 Pipeline finished!'
-        }
         success {
-            echo '🎉 Pipeline succeeded!'
+            echo "🎉 Full CI pipeline succeeded! Image tag: ${IMAGE_TAG}"
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo "❌ Pipeline failed! Commit: ${IMAGE_TAG}"
+        }
+        always {
+            sh 'docker image prune -f || true'
         }
     }
 }
