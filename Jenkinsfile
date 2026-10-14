@@ -2,10 +2,10 @@ pipeline {
     agent any
     
     environment {
-        AWS_ACCOUNT_ID = '312695118327'          // REPLACE with YOUR account ID
-        AWS_REGION     = 'eu-central-1'          // REPLACE with your region
+        AWS_ACCOUNT_ID = '312695118327'
+        AWS_REGION     = 'eu-central-1'
         ECR_REPO       = 'task-manager-api'
-        IMAGE_TAG      = ''                      // Set dynamically from Git SHA
+        // IMAGE_TAG is set dynamically in the Checkout stage as env.IMAGE_TAG
     }
     
     stages {
@@ -13,7 +13,6 @@ pipeline {
             steps {
                 checkout scm
                 
-                // Grab the short Git commit SHA for this build
                 script {
                     env.IMAGE_TAG = sh(
                         script: "git rev-parse --short HEAD",
@@ -65,10 +64,10 @@ pipeline {
         
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
-                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
-                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest"
-                echo "✅ Docker image built with tag ${IMAGE_TAG}"
+                sh "docker build -t ${ECR_REPO}:${env.IMAGE_TAG} ."
+                sh "docker tag ${ECR_REPO}:${env.IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${env.IMAGE_TAG}"
+                sh "docker tag ${ECR_REPO}:${env.IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest"
+                echo "✅ Docker image built with tag ${env.IMAGE_TAG}"
             }
         }
         
@@ -81,17 +80,17 @@ pipeline {
                     docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
                     docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                 '''
-                echo "✅ Image pushed to ECR with tag ${IMAGE_TAG}"
+                echo "✅ Image pushed to ECR with tag ${env.IMAGE_TAG}"
             }
         }
     }
     
     post {
         success {
-            echo "🎉 Full CI pipeline succeeded! Image tag: ${IMAGE_TAG}"
+            echo "🎉 Full CI pipeline succeeded! Image tag: ${env.IMAGE_TAG}"
         }
         failure {
-            echo "❌ Pipeline failed! Commit: ${IMAGE_TAG}"
+            echo "❌ Pipeline failed! Commit: ${env.IMAGE_TAG}"
         }
         always {
             sh 'docker image prune -f || true'
