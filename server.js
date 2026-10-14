@@ -17,11 +17,13 @@ let tasks = [
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Welcome to Task Manager API!',
-    version: '1.0.0',
+    version: '1.1.0',
     endpoints: {
       'GET /tasks': 'Get all tasks',
       'POST /tasks': 'Create a new task',
-      'GET /health': 'Check if app is healthy'
+      'GET /tasks/:id': 'Get a single task by ID',
+      'GET /health': 'Check if app is healthy',
+      'GET /version': 'Get API version info'
     }
   });
 });
@@ -31,9 +33,28 @@ app.get('/tasks', (req, res) => {
   res.json(tasks);
 });
 
+// ✅ NEW: Get a single task by ID
+app.get('/tasks/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const task = tasks.find(t => t.id === id);
+  if (!task) {
+    return res.status(404).json({ error: `Task ${id} not found` });
+  }
+  res.json(task);
+});
+
 // Route: Health check (used by Kubernetes later to know if app is alive)
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date() });
+});
+
+// ✅ NEW: Version endpoint — useful for verifying which build is deployed
+app.get('/version', (req, res) => {
+  res.json({
+    version: '1.1.0',
+    commit: process.env.GIT_COMMIT || 'unknown',
+    port: PORT
+  });
 });
 
 // Route: Create a new task
