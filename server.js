@@ -1,83 +1,66 @@
-// Import the Express library (our web server toolkit)
 const express = require('express');
+const db = require('./db');
 
-// Create a new web server
 const app = express();
-
-// Tell the server to understand JSON data (like a universal language)
 app.use(express.json());
 
-// A simple list to store tasks (in real apps, this would be a database)
-let tasks = [
-  { id: 1, title: 'Learn Jenkins', done: false },
-  { id: 2, title: 'Deploy to AWS', done: false }
-];
-
-// Route: When someone visits the home page, show a welcome message
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Welcome to Task Manager API!',
-    version: '1.1.0',
+    version: '2.0.0',
+    database: 'DynamoDB',
     endpoints: {
       'GET /tasks': 'Get all tasks',
       'POST /tasks': 'Create a new task',
-      'GET /tasks/:id': 'Get a single task by ID',
-      'GET /health': 'Check if app is healthy',
-      'GET /version': 'Get API version info'
+      'GET /tasks/:id': 'Get a specific task',
+      'DELETE /tasks/:id': 'Delete a task',
+      'GET /health': 'Health check'
     }
   });
 });
 
-// Route: Get all tasks
-app.get('/tasks', (req, res) => {
-  res.json(tasks);
-});
-
-// ✅ NEW: Get a single task by ID
-app.get('/tasks/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const task = tasks.find(t => t.id === id);
-  if (!task) {
-    return res.status(404).json({ error: `Task ${id} not found` });
+app.get('/tasks', async (req, res) => {
+  try {
+    const tasks = await db.getAllTasks();
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  res.json(task);
 });
 
-// Route: Health check (used by Kubernetes later to know if app is alive)
+app.get('/tasks/:id', async (req, res) => {
+  try {
+    const task = await db.getTask(req.params.id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/tasks', async (req, res) => {
+  try {
+    const task = await db.createTask(req.body.title);
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/tasks/:id', async (req, res) => {
+  try {
+    const result = await db.deleteTask(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date() });
+  res.json({ status: 'healthy', timestamp: new Date(), database: 'connected' });
 });
 
-// ✅ NEW: Version endpoint — useful for verifying which build is deployed
-app.get('/version', (req, res) => {
-  res.json({
-    version: '1.1.0',
-    commit: process.env.GIT_COMMIT || 'unknown',
-    port: PORT
-  });
-});
-
-// Route: Create a new task
-app.post('/tasks', (req, res) => {
-  const newTask = {
-    id: tasks.length + 1,
-    title: req.body.title,
-    done: false
-  };
-  tasks.push(newTask);
-  res.status(201).json(newTask);
-});
-// New feature: Login endpoint
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === 'admin' && password === 'secret') {
-    res.json({ success: true, token: 'fake-jwt-token' });
-  } else {
-    res.status(401).json({ success: false, message: 'Invalid credentials' });
-  }
-});
-// Start the server on port 3000
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Task Manager API running on port ${PORT}`);
+  console.log(`Task Manager API v2.0.0 running on port ${PORT}`);
 });
