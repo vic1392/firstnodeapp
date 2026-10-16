@@ -1,20 +1,22 @@
 const express = require('express');
 const db = require('./db');
+const pkg = require('./package.json');
 
 const app = express();
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Welcome to Task Manager API!',
-    version: '2.0.0',
+    version: pkg.version,
     database: 'DynamoDB',
     endpoints: {
       'GET /tasks': 'Get all tasks',
       'POST /tasks': 'Create a new task',
       'GET /tasks/:id': 'Get a specific task',
       'DELETE /tasks/:id': 'Delete a task',
-      'GET /health': 'Health check'
+      'GET /health': 'Health check',
+      'GET /version': 'API version'
     }
   });
 });
@@ -57,10 +59,23 @@ app.delete('/tasks/:id', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date(), database: 'connected' });
+  res.json({
+    status: 'healthy',
+    timestamp: new Date(),
+    database: 'connected'
+  });
+});
+
+app.get('/version', (req, res) => {
+  res.json({
+    version: pkg.version,
+    name: pkg.name,
+    database: 'DynamoDB',
+    timestamp: new Date().toISOString()
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Task Manager API v2.0.0 running on port ${PORT}`);
+  console.log(`Task Manager API v${pkg.version} running on port ${PORT}`);
 });
